@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RANKING MUNDIAL — RETRO ARCADE</title>
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-XXXXXXXXXXXXXXXX" crossorigin="anonymous"></script>
+</head>
+<body>
+
+  <div class="game-header">
+    <h1>🏆 RANKING MUNDIAL</h1>
+    <a class="back-link" href="index.html">◄ VOLTAR</a>
+  </div>
+
+  <main style="max-width:760px">
+
+    <!-- Entrada de nickname -->
+    <div class="rank-box">
+      <h2 class="section-title">ENTRE NO RANKING</h2>
+      <p class="rank-info">Digite apenas seu nickname e pronto! Suas melhores pontuações entram automaticamente no ranking mundial a cada fim de jogo.</p>
+      <div class="rank-form">
+        <input id="nickInput" maxlength="16" placeholder="SEU NICKNAME..." autocomplete="off">
+        <button id="btnSaveNick">★ ENTRAR</button>
+      </div>
+      <p id="nickStatus" class="rank-status"></p>
+    </div>
+
+    <!-- Seletor de jogo -->
+    <div class="tabs" id="tabs">
+      <button class="tab active" data-game="GERAL">GERAL</button>
+      <button class="tab" data-game="BREAKOUT">BREAKOUT</button>
+      <button class="tab" data-game="PONG">PONG</button>
+      <button class="tab" data-game="ASTEROIDES">ASTEROIDES</button>
+      <button class="tab" data-game="SNAKE">SNAKE</button>
+    </div>
+
+    <div class="rank-live" id="rankLive">CARREGANDO RANKING MUNDIAL...</div>
+
+    <!-- Tabela -->
+    <div class="rank-table-wrap">
+      <table class="rank-table">
+        <thead>
+          <tr><th>#</th><th>NICKNAME</th><th>JOGO</th><th>PONTOS</th></tr>
+        </thead>
+        <tbody id="rankBody"></tbody>
+      </table>
+      <p id="emptyMsg" class="rank-empty hidden">NENHUMA PONTUAÇÃO AINDA — JOGUE E SEJA O PRIMEIRO! ▶</p>
+    </div>
+
+    <div class="ad-slot inline">
+      <ins class="adsbygoogle"
+           style="display:block"
+           data-ad-client="ca-pub-XXXXXXXXXXXXXXXX"
+           data-ad-slot="7777777777"
+           data-ad-format="auto"
+           data-full-width-responsive="true"></ins>
+      <script>(adsbygoogle = window.adsbygoogle || []).push({});</script>
+    </div>
+
+    <!-- Apoie o criador (separado dos anúncios) -->
+    <div class="apoie-block">
+      <button class="btn-coin" id="btnCoinRank">🪙 INSERT COIN — APOIE O CRIADOR</button>
+      <p class="apoie-hint">Projeto independente. Ajude a manter os jogos online! ❤️</p>
+    </div>
+
+  </main>
+
+  <footer>
+    <button class="btn-coin" id="btnCoinFooter">🪙 INSERT COIN — APOIE O CRIADOR</button>
+    <p style="margin-top:16px">RETRO ARCADE © 2026 — Jogos nostálgicos inspirados nos clássicos Atari.</p>
+  </footer>
+
+<script src="js/config.js"></script>
+<script src="js/qrcode.min.js"></script>
+<script src="js/ranking.js"></script>
+<script src="js/apoio.js"></script>
+<script>
+(function(){
+  var RR = window.RetroRanking;
+  var nickInput = document.getElementById('nickInput');
+  var nickStatus = document.getElementById('nickStatus');
+  var rankBody = document.getElementById('rankBody');
+  var emptyMsg = document.getElementById('emptyMsg');
+  var rankLive = document.getElementById('rankLive');
+  var currentGame = 'GERAL';
+
+  // Nickname inicial
+  var saved = RR.getNick();
+  if (saved) {
+    nickInput.value = saved;
+    nickStatus.textContent = '★ VOCÊ ESTÁ NO RANKING COMO: ' + saved;
+    nickStatus.style.color = '#39ff14';
+  } else {
+    nickStatus.textContent = 'VOCÊ AINDA NÃO ENTROU NO RANKING.';
+    nickStatus.style.color = '#9a9ab0';
+  }
+
+  document.getElementById('btnSaveNick').addEventListener('click', function(){
+    var nick = RR.setNick(nickInput.value);
+    if (!nick) {
+      nickStatus.textContent = 'DIGITE UM NICKNAME VÁLIDO (1-16 CARACTERES).';
+      nickStatus.style.color = '#ff2d95';
+      return;
+    }
+    nickStatus.style.color = '#39ff14';
+    nickStatus.textContent = '★ BEM-VINDO AO RANKING, ' + nick + '!';
+  });
+
+  // Abas
+  document.getElementById('tabs').addEventListener('click', function(e){
+    var btn = e.target.closest ? e.target.closest('.tab') : null;
+    if (!btn) return;
+    var all = document.querySelectorAll('.tab');
+    for (var i = 0; i < all.length; i++) all[i].classList.remove('active');
+    btn.classList.add('active');
+    currentGame = btn.getAttribute('data-game');
+    render();
+  });
+
+  function medal(i) { return i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : (i + 1); }
+
+  function paint(rows, source){
+    rows = RR.normalize(rows);
+    // GERAL: soma as melhores pontuações de cada nickname
+    if (currentGame === 'GERAL') {
+      var byNick = {};
+      rows.forEach(function(e){
+        if (!e.nickname) return;
+        // melhor por (nick, jogo)
+        var k = e.nickname + '|' + e.game;
+        if (!byNick[k] || e.score > byNick[k]) byNick[k] = e.score;
+      });
+      var tot = {};
+      Object.keys(byNick).forEach(function(k){
+        var n = k.split('|')[0];
+        tot[n] = (tot[n] || 0) + byNick[k];
+      });
+      rows = Object.keys(tot).map(function(n){ return { nickname: n, game: 'TOTAL', score: tot[n] }; })
+        .sort(function(a,b){ return b.score - a.score; }).slice(0, 10);
+    } else {
+      rows = rows.filter(function(e){ return (e.game || '').toUpperCase() === currentGame; })
+        .sort(function(a,b){ return b.score - a.score; }).slice(0, 10);
+    }
+
+    rankBody.innerHTML = '';
+    if (!rows.length) { emptyMsg.classList.remove('hidden'); return; }
+    emptyMsg.classList.add('hidden');
+
+    rows.forEach(function(e, i){
+      var tr = document.createElement('tr');
+      if (i === 0) tr.className = 'gold';
+      else if (i === 1) tr.className = 'silver';
+      else if (i === 2) tr.className = 'bronze';
+      var c0 = document.createElement('td'); c0.textContent = medal(i);
+      var c1 = document.createElement('td'); c1.className = 'nick'; c1.textContent = e.nickname;
+      var c2 = document.createElement('td'); c2.className = 'game-tag'; c2.textContent = (e.game || '').toUpperCase();
+      var c3 = document.createElement('td'); c3.className = 'pts';
+      c3.textContent = Number(e.score || 0).toLocaleString('pt-BR');
+      tr.appendChild(c0); tr.appendChild(c1); tr.appendChild(c2); tr.appendChild(c3);
+      rankBody.appendChild(tr);
+    });
+
+    var label = source === 'supabase' ? '🌍 MUNDIAL — SUPABASE SINCRONIZADO'
+      : source === 'cache' ? '⚡ OFFLINE — EXIBINDO ÚLTIMA SINCRONIA'
+      : '📁 LOCAL — SUPABASE INDISPONÍVEL';
+    rankLive.textContent = label;
+    rankLive.className = 'rank-live ' + (source === 'supabase' ? 'ok' : 'warn');
+  }
+
+  function render(){
+    rankLive.textContent = 'CARREGANDO RANKING MUNDIAL...';
+    rankLive.className = 'rank-live';
+    RR.top(currentGame === 'GERAL' ? null : currentGame.toLowerCase(), 10, paint);
+  }
+
+  render();
+  // Atualiza após nova pontuação / volta para a aba
+  setInterval(render, 30000);
+  document.addEventListener('visibilitychange', function(){
+    if (!document.hidden) render();
+  });
+})();
+</script>
+</body>
+</html>

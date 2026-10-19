@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pong — RETRO ARCADE</title>
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/style.css">
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-XXXXXXXXXXXXXXXX" crossorigin="anonymous"></script>
+  <script src="../js/config.js"></script>
+  <script src="../js/qrcode.min.js"></script>
+  <script src="../js/ranking.js"></script>
+  <script src="../js/apoio.js"></script>
+</head>
+<body>
+
+  <div class="game-header">
+    <h1>PONG</h1>
+    <a class="back-link" href="../index.html">◄ VOLTAR</a>
+  </div>
+
+  <div class="game-wrap">
+    <div class="hud">
+      <span>VOCÊ: <b id="p1">0</b></span>
+      <span>COMPUTADOR: <b id="p2">0</b></span>
+    </div>
+
+    <canvas id="c" width="720" height="440"></canvas>
+
+    <div class="controls-info">
+      <kbd>▲</kbd> <kbd>▼</kbd> ou <kbd>W</kbd> <kbd>S</kbd> — mover raquete<br>
+      Primeiro a 7 pontos vence!
+    </div>
+
+    <div class="ad-slot inline" style="width:100%">
+      <ins class="adsbygoogle"
+           style="display:block"
+           data-ad-client="ca-pub-XXXXXXXXXXXXXXXX"
+           data-ad-slot="4444444444"
+           data-ad-format="auto"
+           data-full-width-responsive="true"></ins>
+      <script>(adsbygoogle = window.adsbygoogle || []).push({});</script>
+    </div>
+  </div>
+
+  <div class="overlay" id="overlay">
+    <h2>PONG</h2>
+    <p>Derrote o computador!<br>Primeiro a 7 pontos vence a partida.</p>
+    <button id="btnStart">▶ COMEÇAR</button>
+    <div id="apoioGameover" class="apoio-gover hidden">
+      <p class="apoio-gameover">Mais uma tentativa? 👾 Se você está curtindo o jogo, considere apoiar o criador.</p>
+      <button class="btn-coin" id="btnCoinGameover">🪙 INSERT COIN</button>
+    </div>
+  </div>
+
+<script>
+(function(){
+  const canvas = document.getElementById('c');
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+
+  const p1El = document.getElementById('p1');
+  const p2El = document.getElementById('p2');
+  const overlay = document.getElementById('overlay');
+  const btnStart = document.getElementById('btnStart');
+
+  const PADDLE_W = 12, PADDLE_H = 80, BALL_R = 8, WIN = 7;
+  const CPU_SPEED = 4.6;
+
+  let p1, p2, ball, score1, score2, running, keys = {};
+
+  function serve(toward) {
+    const angle = (Math.random() * 50 - 25) * Math.PI / 180;
+    const speed = 6;
+    ball = {
+      x: W/2, y: H/2,
+      dx: Math.cos(angle) * speed * (toward || (Math.random() < .5 ? -1 : 1)),
+      dy: Math.sin(angle) * speed,
+      speed: speed
+    };
+  }
+
+  function init() {
+    p1 = { x: 30, y: H/2 - PADDLE_H/2, score: 0 };
+    p2 = { x: W - 30 - PADDLE_W, y: H/2 - PADDLE_H/2, score: 0 };
+    score1 = score2 = 0;
+    serve();
+    updateHUD();
+  }
+
+  function updateHUD() { p1El.textContent = score1; p2El.textContent = score2; }
+
+  function update() {
+    // Jogador
+    if (keys.ArrowUp || keys.w) p1.y -= 7;
+    if (keys.ArrowDown || keys.s) p1.y += 7;
+    p1.y = Math.max(0, Math.min(H - PADDLE_H, p1.y));
+
+    // CPU (segue a bola com limite de velocidade)
+    const target = ball.y - PADDLE_H/2;
+    if (p2.y < target - 4) p2.y += CPU_SPEED;
+    else if (p2.y > target + 4) p2.y -= CPU_SPEED;
+    p2.y = Math.max(0, Math.min(H - PADDLE_H, p2.y));
+
+    ball.x += ball.dx;
+    ball.y += ball.dy;
+
+    // Teto/chão
+    if (ball.y < BALL_R) { ball.y = BALL_R; ball.dy *= -1; }
+    if (ball.y > H - BALL_R) { ball.y = H - BALL_R; ball.dy *= -1; }
+
+    // Raquetes
+    function hitPaddle(p) {
+      return ball.x + BALL_R > p.x && ball.x - BALL_R < p.x + PADDLE_W &&
+             ball.y + BALL_R > p.y && ball.y - BALL_R < p.y + PADDLE_H;
+    }
+    if (ball.dx < 0 && hitPaddle(p1)) {
+      const rel = (ball.y - (p1.y + PADDLE_H/2)) / (PADDLE_H/2);
+      ball.speed = Math.min(ball.speed + 0.4, 14);
+      ball.dx = Math.abs(Math.cos(rel * 1.05) * ball.speed);
+      ball.dy = Math.sin(rel * 1.05) * ball.speed;
+      ball.x = p1.x + PADDLE_W + BALL_R;
+    }
+    if (ball.dx > 0 && hitPaddle(p2)) {
+      const rel = (ball.y - (p2.y + PADDLE_H/2)) / (PADDLE_H/2);
+      ball.speed = Math.min(ball.speed + 0.4, 14);
+      ball.dx = -Math.abs(Math.cos(rel * 1.05) * ball.speed);
+      ball.dy = Math.sin(rel * 1.05) * ball.speed;
+      ball.x = p2.x - BALL_R;
+    }
+
+    // Pontuação
+    if (ball.x < -BALL_R) { score2++; onPoint(); }
+    if (ball.x > W + BALL_R) { score1++; onPoint(); }
+  }
+
+  function onPoint() {
+    updateHUD();
+    if (score1 >= WIN || score2 >= WIN) {
+      running = false;
+      const win = score1 >= WIN;
+      saveHigh(score1);
+      overlay.querySelector('h2').textContent = win ? 'VOCÊ VENCEU!' : 'VOCÊ PERDEU';
+      overlay.querySelector('p').innerHTML = (win ? 'Parabéns, campeão!' : 'O computador venceu...') +
+        '<br>PONTUAÇÃO: ' + score1 + ' × ' + score2;
+      btnStart.textContent = '▶ JOGAR DE NOVO';
+      overlay.classList.remove('hidden');
+      var ag = document.getElementById('apoioGameover'); if (ag) ag.classList.remove('hidden');
+      if (window.RetroRanking) RetroRanking.prompt('PONG', score1);
+    } else {
+      serve(score1 >= score2 ? -1 : 1);
+    }
+  }
+
+  function saveHigh(s) {
+    const hi = Math.max(s, parseInt(localStorage.getItem('pong_hi') || '0'));
+    localStorage.setItem('pong_hi', hi);
+  }
+
+  function draw() {
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, W, H);
+
+    // Linha central
+    ctx.strokeStyle = '#444';
+    ctx.setLineDash([12, 14]);
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(W/2, 0); ctx.lineTo(W/2, H);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Números do placar
+    ctx.fillStyle = '#333';
+    ctx.font = '64px "Press Start 2P"';
+    ctx.textAlign = 'center';
+    ctx.fillText(score1, W/4, 80);
+    ctx.fillText(score2, W*3/4, 80);
+
+    // Raquetes
+    ctx.fillStyle = '#39ff14';
+    ctx.fillRect(p1.x, p1.y, PADDLE_W, PADDLE_H);
+    ctx.fillStyle = '#ff2d95';
+    ctx.fillRect(p2.x, p2.y, PADDLE_W, PADDLE_H);
+
+    // Bola
+    ctx.fillStyle = '#ffd800';
+    ctx.shadowColor = '#ffd800';
+    ctx.shadowBlur = 14;
+    ctx.fillRect(ball.x - BALL_R, ball.y - BALL_R, BALL_R*2, BALL_R*2);
+    ctx.shadowBlur = 0;
+  }
+
+  function loop() {
+    if (running) update();
+    draw();
+    requestAnimationFrame(loop);
+  }
+
+  btnStart.addEventListener('click', function(){
+    if (score1 >= WIN || score2 >= WIN || !ball) init();
+    var ag = document.getElementById('apoioGameover'); if (ag) ag.classList.add('hidden');
+    overlay.classList.add('hidden');
+    running = true;
+  });
+
+  document.addEventListener('keydown', function(e){
+    keys[e.key.length === 1 ? e.key.toLowerCase() : e.key] = true;
+    if (['ArrowUp','ArrowDown'].includes(e.key)) e.preventDefault();
+  });
+  document.addEventListener('keyup', function(e){
+    keys[e.key.length === 1 ? e.key.toLowerCase() : e.key] = false;
+  });
+
+  // Toque
+  canvas.addEventListener('touchmove', function(e){
+    e.preventDefault();
+    const rect = canvas.getBoundingClientRect();
+    const y = (e.touches[0].clientY - rect.top) * (H / rect.height);
+    p1.y = Math.max(0, Math.min(H - PADDLE_H, y - PADDLE_H/2));
+  }, {passive:false});
+
+  init();
+  loop();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Asteroides — RETRO ARCADE</title>
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/style.css">
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-XXXXXXXXXXXXXXXX" crossorigin="anonymous"></script>
+  <script src="../js/config.js"></script>
+  <script src="../js/qrcode.min.js"></script>
+  <script src="../js/ranking.js"></script>
+  <script src="../js/apoio.js"></script>
+</head>
+<body>
+
+  <div class="game-header">
+    <h1>ASTEROIDES</h1>
+    <a class="back-link" href="../index.html">◄ VOLTAR</a>
+  </div>
+
+  <div class="game-wrap">
+    <div class="hud">
+      <span>PONTOS: <b id="score">0</b></span>
+      <span>VIDAS: <b id="lives">3</b></span>
+      <span>NÍVEL: <b id="level">1</b></span>
+    </div>
+
+    <canvas id="c" width="720" height="520"></canvas>
+
+    <div class="controls-info">
+      <kbd>◄</kbd> <kbd>►</kbd> girar &nbsp; <kbd>▲</kbd> impulso &nbsp; <kbd>ESPAÇO</kbd> atirar<br>
+      Sobreviva! Asteroides maiores viram 2 menores ao serem destruídos.
+    </div>
+
+    <div class="ad-slot inline" style="width:100%">
+      <ins class="adsbygoogle"
+           style="display:block"
+           data-ad-client="ca-pub-XXXXXXXXXXXXXXXX"
+           data-ad-slot="5555555555"
+           data-ad-format="auto"
+           data-full-width-responsive="true"></ins>
+      <script>(adsbygoogle = window.adsbygoogle || []).push({});</script>
+    </div>
+  </div>
+
+  <div class="overlay" id="overlay">
+    <h2>ASTEROIDES</h2>
+    <p>Pilote sua nave e destrua todos os asteroides.<br>Não colida!</p>
+    <button id="btnStart">▶ COMEÇAR</button>
+  </div>
+
+<script>
+(function(){
+  const canvas = document.getElementById('c');
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+
+  const scoreEl = document.getElementById('score');
+  const livesEl = document.getElementById('lives');
+  const levelEl = document.getElementById('level');
+  const overlay = document.getElementById('overlay');
+  const btnStart = document.getElementById('btnStart');
+
+  let ship, bullets, asteroids, particles, score, lives, level, running, keys = {}, fireCooldown = 0, respawnTimer = 0;
+
+  function rand(a, b) { return a + Math.random() * (b - a); }
+
+  function makeAsteroid(x, y, size) {
+    const verts = [];
+    const n = 10 + Math.floor(Math.random() * 3);
+    for (let i = 0; i < n; i++) verts.push(rand(0.72, 1.25));
+    return {
+      x, y, size,
+      r: size * 18,
+      dx: rand(-1.5, 1.5) * (4 - size) / 2,
+      dy: rand(-1.5, 1.5) * (4 - size) / 2,
+      rot: rand(0, Math.PI * 2),
+      dr: rand(-0.03, 0.03),
+      verts
+    };
+  }
+
+  function spawnAsteroids(n) {
+    for (let i = 0; i < n; i++) {
+      let x, y;
+      do {
+        x = rand(0, W); y = rand(0, H);
+      } while (ship && Math.hypot(x - ship.x, y - ship.y) < 140);
+      asteroids.push(makeAsteroid(x, y, 3));
+    }
+  }
+
+  function init() {
+    ship = { x: W/2, y: H/2, a: -Math.PI/2, dx: 0, dy: 0, visible: true };
+    bullets = []; asteroids = []; particles = [];
+    score = 0; lives = 3; level = 1;
+    spawnAsteroids(4);
+    updateHUD();
+  }
+
+  function updateHUD() {
+    scoreEl.textContent = score;
+    livesEl.textContent = lives;
+    levelEl.textContent = level;
+  }
+
+  function shoot() {
+    if (fireCooldown > 0 || !ship.visible) return;
+    fireCooldown = 10;
+    bullets.push({
+      x: ship.x + Math.cos(ship.a) * 14,
+      y: ship.y + Math.sin(ship.a) * 14,
+      dx: Math.cos(ship.a) * 10 + ship.dx,
+      dy: Math.sin(ship.a) * 10 + ship.dy,
+      life: 60
+    });
+  }
+
+  function explode(x, y, color, n) {
+    for (let i = 0; i < n; i++) {
+      const a = rand(0, Math.PI * 2), s = rand(1, 4);
+      particles.push({ x, y, dx: Math.cos(a)*s, dy: Math.sin(a)*s, life: rand(15, 35), color });
+    }
+  }
+
+  function wrap(o) {
+    if (o.x < -30) o.x += W + 60; if (o.x > W + 30) o.x -= W + 60;
+    if (o.y < -30) o.y += H + 60; if (o.y > H + 30) o.y -= H + 60;
+  }
+
+  function update() {
+    if (fireCooldown > 0) fireCooldown--;
+    if (respawnTimer > 0) respawnTimer--;
+
+    // Nave
+    if (ship.visible) {
+      if (keys.ArrowLeft) ship.a -= 0.07;
+      if (keys.ArrowRight) ship.a += 0.07;
+      if (keys.ArrowUp) { ship.dx += Math.cos(ship.a) * 0.14; ship.dy += Math.sin(ship.a) * 0.14; }
+      ship.dx *= 0.99; ship.dy *= 0.99;
+      ship.x += ship.dx; ship.y += ship.dy;
+      wrap(ship);
+    }
+
+    // Tiro
+    for (const b of bullets) { b.x += b.dx; b.y += b.dy; b.life--; wrap(b); }
+    bullets = bullets.filter(b => b.life > 0);
+
+    // Asteroides
+    for (const a of asteroids) {
+      a.x += a.dx; a.y += a.dy; a.rot += a.dr;
+      wrap(a);
+    }
+
+    // Colisões bala × asteroide
+    for (let i = asteroids.length - 1; i >= 0; i--) {
+      const a = asteroids[i];
+      for (let j = bullets.length - 1; j >= 0; j--) {
+        const b = bullets[j];
+        if (Math.hypot(a.x - b.x, a.y - b.y) < a.r) {
+          bullets.splice(j, 1);
+          asteroids.splice(i, 1);
+          explode(a.x, a.y, '#00e5ff', 12);
+          if (a.size > 1) {
+            asteroids.push(makeAsteroid(a.x, a.y, a.size - 1));
+            asteroids.push(makeAsteroid(a.x, a.y, a.size - 1));
+          }
+          score += (4 - a.size) * 100;
+          updateHUD();
+          break;
+        }
+      }
+    }
+
+    // Colisão nave × asteroide
+    if (ship.visible && respawnTimer <= 0) {
+      for (const a of asteroids) {
+        if (Math.hypot(a.x - ship.x, a.y - ship.y) < a.r + 10) {
+          explode(ship.x, ship.y, '#39ff14', 25);
+          lives--;
+          updateHUD();
+          if (lives <= 0) return gameOver();
+          ship.x = W/2; ship.y = H/2; ship.dx = ship.dy = 0;
+          respawnTimer = 90;
+          break;
+        }
+      }
+    }
+
+    // Partículas
+    for (const p of particles) { p.x += p.dx; p.y += p.dy; p.life--; }
+    particles = particles.filter(p => p.life > 0);
+
+    // Onda completa
+    if (asteroids.length === 0) {
+      level++;
+      spawnAsteroids(3 + level);
+      updateHUD();
+    }
+  }
+
+  function drawShip(x, y, a) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(a);
+    ctx.strokeStyle = '#39ff14';
+    ctx.lineWidth = 2;
+    ctx.shadowColor = '#39ff14';
+    ctx.shadowBlur = 10;
+    ctx.beginPath();
+    ctx.moveTo(14, 0); ctx.lineTo(-10, -9); ctx.lineTo(-6, 0); ctx.lineTo(-10, 9); ctx.closePath();
+    ctx.stroke();
+    // Chama do motor
+    if (keys.ArrowUp) {
+      ctx.strokeStyle = '#ff8a00';
+      ctx.beginPath();
+      ctx.moveTo(-7, -4); ctx.lineTo(-15 - Math.random()*6, 0); ctx.lineTo(-7, 4);
+      ctx.stroke();
+    }
+    ctx.restore();
+    ctx.shadowBlur = 0;
+  }
+
+  function draw() {
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, W, H);
+
+    // Estrelas
+    ctx.fillStyle = 'rgba(255,255,255,.35)';
+    for (let i = 0; i < 40; i++) {
+      ctx.fillRect((i * 137) % W, (i * 211) % H, 2, 2);
+    }
+
+    // Asteroides
+    ctx.strokeStyle = '#9a9ab0';
+    ctx.lineWidth = 2;
+    for (const a of asteroids) {
+      ctx.save();
+      ctx.translate(a.x, a.y);
+      ctx.rotate(a.rot);
+      ctx.beginPath();
+      a.verts.forEach((v, i) => {
+        const ang = (i / a.verts.length) * Math.PI * 2;
+        const px = Math.cos(ang) * a.r * v, py = Math.sin(ang) * a.r * v;
+        i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+      });
+      ctx.closePath();
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    // Balas
+    ctx.fillStyle = '#ffd800';
+    ctx.shadowColor = '#ffd800';
+    ctx.shadowBlur = 8;
+    for (const b of bullets) ctx.fillRect(b.x - 2, b.y - 2, 4, 4);
+    ctx.shadowBlur = 0;
+
+    // Nave
+    if (ship.visible && (respawnTimer <= 0 || Math.floor(respawnTimer / 5) % 2 === 0)) {
+      drawShip(ship.x, ship.y, ship.a);
+    }
+
+    // Partículas
+    for (const p of particles) {
+      ctx.globalAlpha = Math.min(1, p.life / 20);
+      ctx.fillStyle = p.color;
+      ctx.fillRect(p.x, p.y, 3, 3);
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  function gameOver() {
+    running = false;
+    const hi = Math.max(score, parseInt(localStorage.getItem('asteroids_hi') || '0'));
+    localStorage.setItem('asteroids_hi', hi);
+    overlay.querySelector('h2').textContent = 'FIM DE JOGO';
+    overlay.querySelector('p').innerHTML = 'PONTUAÇÃO: ' + score + '<br>RECORDE: ' + hi;
+    btnStart.textContent = '▶ JOGAR DE NOVO';
+    overlay.classList.remove('hidden');
+    if (window.RetroRanking) RetroRanking.prompt('ASTEROIDES', score);
+  }
+
+  function loop() {
+    if (running) update();
+    draw();
+    requestAnimationFrame(loop);
+  }
+
+  btnStart.addEventListener('click', function(){
+    if (lives <= 0 || !ship) init();
+    overlay.classList.add('hidden');
+    running = true;
+  });
+
+  document.addEventListener('keydown', function(e){
+    keys[e.key] = true;
+    if (e.code === 'Space') { shoot(); e.preventDefault(); }
+    if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key)) e.preventDefault();
+  });
+  document.addEventListener('keyup', function(e){ keys[e.key] = false; });
+
+  // Toque: lado esquerdo gira, direito atira, toque duplo impulsa
+  canvas.addEventListener('touchstart', function(e){
+    e.preventDefault();
+    for (const t of e.touches) {
+      const rect = canvas.getBoundingClientRect();
+      const x = (t.clientX - rect.left) / rect.width;
+      if (x > 0.7) shoot();
+      else keys[x < 0.35 ? 'ArrowLeft' : 'ArrowUp'] = true;
+    }
+  }, {passive:false});
+  canvas.addEventListener('touchend', function(){ keys.ArrowLeft = keys.ArrowRight = keys.ArrowUp = false; });
+
+  init();
+  loop();
+})();
+</script>
+</body>
+</html>
